@@ -1,0 +1,202 @@
+
+struct XllRename(bool _XllRename) {
+	enum xllRename = _XllRename;
+}
+
+template IsXllRename(T...) {
+	enum bool IsXllRename = T[0].stringof.startsWith("XllRename!");
+}
+
+
+struct XllAtLeastArgs(bool _XllAtLeastArgs) {
+	enum xllAtLeastArgs = _XllAtLeastArgs;
+}
+
+template IsXllAtLeastArgs(T...) {
+	enum bool IsXllAtLeastArgs = T[0].stringof.startsWith("XllAtLeastArgs!");
+}
+
+
+struct XllCategory(bool _XllCategory) {
+	enum xllCategory = _XllCategory;
+}
+
+template IsXllCategory(T...) {
+	enum bool IsXllCategory = T[0].stringof.startsWith("XllCategory!");
+}
+
+
+struct XllShortcut(bool _XllShortcut) {
+	enum xllShortcut = _XllShortcut;
+}
+
+template IsXllShortcut(T...) {
+	enum bool IsXllShortcut = T[0].stringof.startsWith("XllShortcut!");
+}
+
+
+struct XllHelpTopic(bool _XllHelpTopic) {
+	enum xllHelpTopic = _XllHelpTopic;
+}
+
+template IsXllHelpTopic(T...) {
+	enum bool IsXllHelpTopic = T[0].stringof.startsWith("XllHelpTopic!");
+}
+
+
+struct XllFunctionHelp(bool _XllFunctionHelp) {
+	enum xllFunctionHelp = _XllFunctionHelp;
+}
+
+template IsXllFunctionHelp(T...) {
+	enum bool IsXllFunctionHelp = T[0].stringof.startsWith("XllFunctionHelp!");
+}
+
+
+struct XllArgumentHelp(bool _XllArgumentHelp) {
+	enum xllArgumentHelp = _XllArgumentHelp;
+}
+
+template IsXllArgumentHelp(T...) {
+	enum bool IsXllArgumentHelp = T[0].stringof.startsWith("XllArgumentHelp!");
+}
+
+
+struct XllThreadSafe(bool _XllThreadSafe) {
+	enum xllThreadSafe = _XllThreadSafe;
+}
+
+template IsXllThreadSafe(T...) {
+	enum bool IsXllThreadSafe = T[0].stringof.startsWith("XllThreadSafe!");
+}
+
+
+struct XllMacro(bool _XllMacro) {
+	enum xllMacro = _XllMacro;
+}
+
+template IsXllMacro(T...) {
+	enum bool IsXllMacro = T[0].stringof.startsWith("XllMacro!");
+}
+
+
+struct XllAllowAbort(bool _XllAllowAbort) {
+	enum xllAllowAbort = _XllAllowAbort;
+}
+
+template IsXllAllowAbort(T...) {
+	enum bool IsXllAllowAbort = T[0].stringof.startsWith("XllAllowAbort!");
+}
+
+
+struct XllDisableFunctionWizard(bool _XllDisableFunctionWizard) {
+	enum xllDisableFunctionWizard = _XllDisableFunctionWizard;
+}
+
+template IsXllDisableFunctionWizard(T...) {
+	enum bool IsXllDisableFunctionWizard = T[0].stringof.startsWith("XllDisableFunctionWizard!");
+}
+
+
+struct XllDisableReplaceCalc(bool _XllDisableReplaceCalc) {
+	enum xllDisableReplaceCalc = _XllDisableReplaceCalc;
+}
+
+template IsXllDisableReplaceCalc(T...) {
+	enum bool IsXllDisableReplaceCalc = T[0].stringof.startsWith("XllDisableReplaceCalc!");
+}
+
+	alias Filter!(IsXllRename, Params) XllRenames;
+static if(XllRenames.length) {
+	enum xllrename = XllRenames[0].xllRename;
+}else{
+	enum xllrename = "";
+}
+	alias Filter!(IsXllAtLeastArgs, Params) XllAtLeastArgss;
+static if(XllAtLeastArgss.length) {
+	enum xllatleastargs = XllAtLeastArgss[0].xllAtLeastArgs;
+}else{
+	enum xllatleastargs = "";
+}
+	alias Filter!(IsXllCategory, Params) XllCategorys;
+static if(XllCategorys.length) {
+	enum xllcategory = XllCategorys[0].xllCategory;
+}else{
+	enum xllcategory = "";
+}
+	alias Filter!(IsXllShortcut, Params) XllShortcuts;
+static if(XllShortcuts.length) {
+	enum xllshortcut = XllShortcuts[0].xllShortcut;
+}else{
+	enum xllshortcut = "";
+}
+	alias Filter!(IsXllHelpTopic, Params) XllHelpTopics;
+static if(XllHelpTopics.length) {
+	enum xllhelptopic = XllHelpTopics[0].xllHelpTopic;
+}else{
+	enum xllhelptopic = "";
+}
+	alias Filter!(IsXllFunctionHelp, Params) XllFunctionHelps;
+static if(XllFunctionHelps.length) {
+	enum xllfunctionhelp = XllFunctionHelps[0].xllFunctionHelp;
+}else{
+	enum xllfunctionhelp = "";
+}
+	alias Filter!(IsXllArgumentHelp, Params) XllArgumentHelps;
+static if(XllArgumentHelps.length) {
+	enum xllargumenthelp = XllArgumentHelps[0].xllArgumentHelp;
+}else{
+	enum xllargumenthelp = "";
+}
+	alias Filter!(IsXllThreadSafe, Params) XllThreadSafes;
+static if(XllThreadSafes.length) {
+	enum xllthreadsafe = XllThreadSafes[0].xllThreadSafe;
+}else{
+	enum xllthreadsafe = "";
+}
+	alias Filter!(IsXllMacro, Params) XllMacros;
+static if(XllMacros.length) {
+	enum xllmacro = XllMacros[0].xllMacro;
+}else{
+	enum xllmacro = "";
+}
+	alias Filter!(IsXllAllowAbort, Params) XllAllowAborts;
+static if(XllAllowAborts.length) {
+	enum xllallowabort = XllAllowAborts[0].xllAllowAbort;
+}else{
+	enum xllallowabort = "";
+}
+	alias Filter!(IsXllDisableFunctionWizard, Params) XllDisableFunctionWizards;
+static if(XllDisableFunctionWizards.length) {
+	enum xlldisablefunctionwizard = XllDisableFunctionWizards[0].xllDisableFunctionWizard;
+}else{
+	enum xlldisablefunctionwizard = "";
+}
+	alias Filter!(IsXllDisableReplaceCalc, Params) XllDisableReplaceCalcs;
+static if(XllDisableReplaceCalcs.length) {
+	enum xlldisablereplacecalc = XllDisableReplaceCalcs[0].xllDisableReplaceCalc;
+}else{
+	enum xlldisablereplacecalc = "";
+}
+
+	alias Filter!(Not!IsXllRename,
+		Filter!(Not!IsXllAtLeastArgs,
+		Filter!(Not!IsXllCategory,
+		Filter!(Not!IsXllShortcut,
+		Filter!(Not!IsXllHelpTopic,
+		Filter!(Not!IsXllFunctionHelp,
+		Filter!(Not!IsXllArgumentHelp,
+		Filter!(Not!IsXllThreadSafe,
+		Filter!(Not!IsXllMacro,
+		Filter!(Not!IsXllAllowAbort,
+		Filter!(Not!IsXllDisableFunctionWizard,
+		Filter!(Not!IsXllDisableReplaceCalc)))))))))))) rem;
+
+	    template IsString(T...) {
+	        enum bool IsString = is(typeof(T[0]) == string);
+	    }
+	    static if(Filter!(IsString, rem).length) {
+	        static assert(false, "string parameters must be wrapped with Docstring, Mode, etc");
+	    }
+	}
+	

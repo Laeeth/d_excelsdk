@@ -1,0 +1,8 @@
+LIBRARY "kpropdll.dll"
+DESCRIPTION     'Simple D/VBA example'
+EXETYPE		NT
+CODE            PRELOAD DISCARDABLE
+DATA            PRELOAD MULTIPLE
+EXPORTS
+	useArray	@1
+	coolString	@2

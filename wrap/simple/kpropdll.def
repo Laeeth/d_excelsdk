@@ -1,0 +1,5 @@
+LIBRARY "kpropdll.dll"
+
+EXPORTS
+	useArray	@1
+	coolString	@2

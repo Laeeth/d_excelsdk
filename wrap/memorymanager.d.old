@@ -1,0 +1,345 @@
+/**
+	Ported from Microsoft's Excel SDK MemoryManager.cpp by Laeeth Isharc.  See Excel SDK for copyright
+
+	The memory manager class is an update to the memory manager
+	in the previous release of the framework.  This class provides
+	each thread with an array of bytes to use as temporary memory.
+	The size of the array, and the methods for dealing with the
+	memory explicitly, is in the class MemoryPool.  
+
+	MemoryManager handles assigning of threads to pools, and the
+	creation of new pools when a thread asks for memory the first
+	time.  Using a singleton class, the manager provides an interface
+	to C code into the manager.  The number of unique pools starts
+	as TotalMemoryPools, defined in MemoryManager.h.  When a new thread
+	needs a pool, and the current set of pools are all assigned,
+	the number of pools increases by a factor of two.
+*/ 
+
+module d_excelsdk.xlld.memorymanager;
+import std.c.windows.windows;
+import xlcall;
+import xlcallcpp;
+import memorypool;
+
+enum TotalMemoryPools=4; // Total number of memory allocation pools to manage
+
+// Singleton instance of the class
+__gshared MemoryManager* vpmm;
+
+
+struct MemoryManager
+{
+	private int currentPoolCount=0;					// Current number of pools
+	private int maxPoolCount=TotalMemoryPools;		// Max number of mem pools
+	static private MemoryPool[] memoryPoolStorage;	// Storage for the memory pools
+
+
+	// Returns the singleton class, or creates one if it doesn't exit
+	static MemoryManager* getManager()
+	{
+		if (!vpmm)
+		{
+			vpmm = new MemoryManager();
+			this.memoryPoolStorage.length=TotalMemoryPools;
+		}
+		return vpmm;
+	}
+
+	
+	// Destructor.  Because of the way memory pools get copied, this function needs to call an
+	// additional function to clear up the MemoryPool memory - the deconstructor on MemoryPool
+	// does not actually delete its memory
+	
+	~this()
+	{
+/**
+		foreach(pmp;memoryPoolStorage)
+		{
+			if (pmp.m_rgchMemBlock !is null)
+				pmp.clearPool();
+		}
+		// delete [] memoryPoolStorage;
+*/	}
+
+	// Method that will query the correct memory pool of the calling thread for a set number of bytes.
+	//  Returns 0 if there was a failure in getting the memory.
+
+	ubyte* getTempMemory(size_t cByte)
+	//LPSTR getTempMemory(size_t cByte)
+	{
+		DWORD dwThreadID;
+		MemoryPool* pmp;
+
+		dwThreadID = GetCurrentThreadId(); //the id of the calling thread
+		pmp = getMemoryPool(dwThreadID);
+
+		if (!pmp) //no more room for pools
+		{
+			return null;
+		}
+
+		return pmp.getTempMemory(cByte);
+	}
+
+	//
+	// Method that tells the pool owned by the calling thread that
+	// it is free to reuse all of its memory
+	//
+	void freeAllTempMemory()
+	{
+		DWORD dwThreadID;
+		MemoryPool* pmp;
+
+		dwThreadID = GetCurrentThreadId(); //the id of the calling thread
+		pmp = getMemoryPool(dwThreadID);
+
+		if (!pmp) //no more room for pools
+		{
+			return;
+		}
+
+		pmp.freeAllTempMemory();
+	}
+
+	//
+	// Method iterates through the memory pools in an attempt to find
+	// the pool that matches the given thread ID. If a pool is not found,
+	// it creates a new one
+	//
+	private MemoryPool* getMemoryPool(DWORD dwThreadID)
+	{
+		int imp; //loop var
+		
+		foreach(i,pmp;memoryPoolStorage)
+		{
+			if (pmp.m_dwOwner == dwThreadID)
+			{
+				return &memoryPoolStorage[i];
+			}
+		}
+
+		return createNewPool(dwThreadID); //didn't find the owner, make a new one
+	}
+
+	//
+	// Will assign an unused pool to a thread; should all pools be assigned,
+	// it will grow the number of pools available.
+	//
+	private MemoryPool* createNewPool(DWORD dwThreadID)
+	{
+		if (currentPoolCount >= maxPoolCount)
+		{
+			growPools();
+		}
+		memoryPoolStorage[currentPoolCount++].m_dwOwner = dwThreadID;
+
+		return &memoryPoolStorage[currentPoolCount-1];
+	}
+
+	//
+	// Increases the number of available pools by a factor of two. All of
+	// the old pools have their memory pointed to by the new pools. The
+	// memory for the new pools that get replaced is first freed. The reason
+	// ~MemoryPool() can't free its array is in this method - they would be
+	// deleted when the old array of pools is freed at the end of the method,
+	// despite the fact they are now being pointed to by the new pools.
+	//
+	void growPools()
+	{
+		MemoryPool* rgmpTemp;
+		MemoryPool* pmpDst;
+		MemoryPool* pmpSrc;
+
+		int i, impMaxNew;
+
+		impMaxNew = 2*maxPoolCount;
+		memoryPoolStorage.length=2*maxPoolCount;
+		/**
+		pmpDst = rgmpTemp = new MemoryPool(2*maxPoolCount);
+		pmpSrc = memoryPoolStorage;
+
+		for (i = 0; i < currentPoolCount; i++)
+		{
+			//delete [] pmpDst.m_rgchMemBlock;
+			pmpDst.m_rgchMemBlock = pmpSrc.m_rgchMemBlock;
+			pmpDst.m_dwOwner = pmpSrc.m_dwOwner;
+
+			pmpDst++;
+			pmpSrc++;
+		}
+		memoryPoolStorage = rgmpTemp;
+		*/
+		maxPoolCount = impMaxNew;
+	}
+}
+
+//
+// Interface for C callers to ask for memory
+//
+// See MemoryPool.h for more details
+//
+//LPSTR mGetTempMemory(size_t cByte)
+ubyte* mGetTempMemory(size_t cByte)
+{
+	return MemoryManager.getManager.getTempMemory(cByte);
+}
+
+//
+// Interface for C callers to allow their memory to be reused
+//
+// See MemoryPool.h for more details
+//
+void MfreeAllTempMemory()
+{
+	MemoryManager.getManager().freeAllTempMemory();
+}
+
+
+/**
+MemoryPool.d - port of MemoryPool.cpp and MemoryPool.h by Laeeth Isharc
+//
+// Purpose:		Class definition for the memory pool class used by the
+//				memory manager.  Each pool is a block of memory set
+//				aside for a specific thread for use in creating temporary
+//				XLOPER/XLOPER12's in the framework
+//
+// Purpose:     A memory pool is an array of characters that is pre-allocated,
+//              and used as temporary memory by the caller. The allocation
+//              algorithm is very simple. When a thread asks for some memory,
+//              the index into the array moves forward by that many bytes, and
+//              a pointer is returned to the previous index before the pointer
+//              was advanced. When a call comes to free all of the memory, the
+//              pointer is set back to the beginning of the array.
+//
+//              Each pool has MEMORYSIZE bytes of storage space available to it
+// 
+// Platform:    Microsoft Windows
+//
+///***************************************************************************
+*/
+import std.c.windows.windows;
+
+//
+// Total amount of memory to allocate for all temporary XLOPERs
+//
+
+enum MEMORYSIZE=10240;
+
+struct MemoryPool
+{
+	DWORD m_dwOwner=cast(DWORD)-1;			// ID of ownning thread
+	ubyte[MEMORYSIZE] m_rgchMemBlock;		// Memory for temporary XLOPERs
+	size_t m_ichOffsetMemBlock=0;	// Offset of next memory block to allocate
+
+	// An empty destructor - see reasoning below
+	//
+	~this()
+	{
+	}
+
+	//
+	// Unable to delete the memory block when we delete the pool,
+	// as it may be still be in use due to a growPools() call; this
+	// method will actually delete the pool's memory
+	//
+
+	void clearPool()
+	{
+		//delete [] m_rgchMemBlock;
+	}
+
+	//
+	// Advances the index forward by the given number of bytes.
+	// Should there not be enough memory, or the number of bytes
+	// is not allowed, this method will return 0. Can be called
+	// and used exactly as malloc().
+	//
+	ubyte* getTempMemory(size_t cBytes)
+	//LPSTR getTempMemory(size_t cBytes)
+	{
+		ubyte* lpMemory;
+
+		if (m_ichOffsetMemBlock + cBytes > MEMORYSIZE || cBytes <= 0)
+		{
+			return null;
+		}
+		else
+		{
+			lpMemory = cast(ubyte*) m_rgchMemBlock + m_ichOffsetMemBlock;
+			m_ichOffsetMemBlock += cBytes;
+
+			return lpMemory;
+		}
+	}
+
+	//
+	// Frees all the temporary memory by setting the index for
+	// available memory back to the beginning
+	//
+	void freeAllTempMemory()
+	{
+		m_ichOffsetMemBlock = 0;
+	}
+}
+
+
+LPXLOPER12 get_DLL_name_2(int calculation_trigger)
+{
+    static XLOPER12 xRtnValue; // Not thread-safe
+
+    Excel12(xlfGetName, &xRtnValue, 0);
+
+// If xlfGetName failed, xRtnValue will be #VALUE!
+    if(xRtnValue.xltype != xltypeStr)
+        return &xRtnValue;
+
+// Make a copy of the DLL path and file name.
+    wchar_t *leader = L"The full pathname for this DLL is ";
+    size_t leader_len = wcslen(leader);
+    size_t dllname_len = xRtnValue.val.str[0];
+    size_t msg_len = leader_len + dllname_len;
+    wchar_t *msg_text = (wchar_t *)malloc(msg_len + 1);
+    wcsncpy_s(msg_text + 1, leader, leader_len);
+    wcsncpy_s(msg_text + 1 + leader_len, xRtnValue.val.str + 1,
+        dllname_len);
+    msg_text[0] = msg_len;
+
+// Now the original string has been copied Excel can free it.
+    Excel12(xlFree, 0, 1, &xRtnValue);
+// Now reuse the XLOPER12 for the new string.
+    xRtnValue.val.str = msg_text;
+// Tell Excel to call back into the DLL to free the string
+// memory after it has copied out the return value.
+    xRtnValue.xltype     = xltypeStr | xlbitDLLFree;
+    return &xRtnValue;
+}
+
+void WINAPI xlAutoFree12(LPXLOPER12 arg)
+{
+    if (arg.xltype & xlbitDLLFree)
+    {
+    	if (arg.xltype & xltypeStr)
+	        free(arg.val.str);
+	    else (if (arg.xltype & xltypeMulti) || (arg.xltype & xlTypeRef))
+	    {
+	    	xlAutoFree12(arg.val.lparray);
+	    	free(arg.val.lparray);
+	    }
+	    else if (arg.xltype & xltypeSRef)
+	    {
+	    	xlAutoFree12(arg.val.ref_);
+	    	free(arg.val.ref_);
+	    }
+	    else if (arg.xltype & xltypeMRef)
+	    {
+	    	xlAutoFree12(arg.val.lpmref);
+	    	free(arg.val.lpmref);
+	    }
+	    else if(arg.xltype & xltypeBigData)
+	    {
+	    	free(arg.val.lpbData);
+	    }
+	    else throw new Exception("xlAutoFree12 called with unknown type: "~arg.xltype.to!string);
+    }
+}
