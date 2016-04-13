@@ -2,3 +2,18 @@
 Translation of Excel SDK to the D Programming Language
 Ported by Laeeth Isharc 2015
 (C) Microsoft etc
+
+Instructions:
+download the Excel SDK
+rename xlcall32.lib for 32 bit from SDK to xlcall32d.lib
+rename xlcall32.lib for 64 bit from SDK to xlcall64d.lib
+
+run make32.bat or make64.bat depending on your system
+this will compile the generic.d sample excel add-in to produce a
+generic32.xll or generic64.xll.  open this file in excel
+enter numbers in cells A1:A3
+type into cell A10  =funcsum(A1:A3).  you should see the sum of the numbers
+
+
+more coming soon.
+
