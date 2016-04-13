@@ -40,7 +40,7 @@ import core.stdc.wchar_ : wcslen;
 import core.stdc.wctype:towlower;
 import std.format;
   
-
+/+
   
 /**
    Syntax of the Register Command:
@@ -124,7 +124,7 @@ struct xllCategory(string _name)
 	xllFunctionHelp!"returns the hash of arguments",xllArgumentHelp!"number 1,2..29 are 1 to 29 arguments to process",
 	xllThreadSafe!false,xllMacro!false,	xllAllowAbort!false,xllVolatile!false,xllDisableFunctionWizard!false,
 	xlldisableReplaceCalc!false)
-
++/
 
 /**
 	To do:
@@ -145,6 +145,7 @@ struct ExcelResult(T)
 enum ExcelReturnStatus
 {
 	success,
+	missing,
 	wrongType,
 	wrongShape,
 	excelError,
@@ -159,23 +160,23 @@ if (is(T==Variant[][]) || (is(T==double[][])) || is(T==double[]))
 	ExcelResult!T ret;
 	long i;					// Row and column counters for arrays 
 	LPXLOPER12 px;			// Pointer into array 
-	ret.suucess=true;
+	ret.success=true;
 	ret.status=ExcelReturnStatus.success;
 
 	switch (pxArg.xltype)
 	{	
 		case xltypeMissing:
-			break;
+			return ExcelResult(false,ExcelReturnStatus.missing);
 
 		case xltypeNum:
-			static if is(T==double[])
-				ret=[pxArg.val.num];
+			static if (is(T==double[]))
+				return ExcelResult(true,ExcelReturnStatus.success,[pxArg.val.num]);
 			else
-				ret=[[pxArg.val.num]];
+				return ExcelResult(true,ExcelReturnStatus.success,[[pxArg.val.num]]);
 			break;
 
 		case xltypeStr:
-			static if(is(T==(double[]))
+			static if(is(T==(double[])))
 				return ExcelDoubleResultVector(false,ExcelReturnStatus.wrongType,[double.nan]);
 			else static if(is(T==double[][]))
 				return ExcelDoubleResultMatrix(false,ExcelReturnStatus.wrongType,[[double.nan]]);
@@ -244,13 +245,17 @@ if (is(T==Variant[][]) || (is(T==double[][])) || is(T==double[]))
 						// if an error store in error //
 						case xltypeErr::
 							status=ExcelReturnStatus.excelError;
-							if(is(T==Variant[][])||is(T==double[][])
+							static if ((is(T==Variant[][]))||(is(T==double[][])))
+							{
 								ret[i][j]=px.val.err;
+							}
 							else // double[]
+							{
 								if (!flipped)
 									ret[i]=px.val.err;
 								else
 									ret[j]=px.val.err;
+							}
 							break;
 
 						case xltypeNil:
@@ -295,6 +300,14 @@ if (is(T==Variant[][]) || (is(T==double[][])) || is(T==double[]))
 }
 
 
+LPXLOPER12 makeXLOPER12(double arg)
+{
+	LPXLOPER12 lpx;
+	lpx=cast(LPXLOPER12) excelCallPool.allocate(XLOPER12.sizeof);
+	lpx.xltype=xltypeNum;
+	lpx.val.num=arg;
+	return lpx;
+}
 // need to have allocator!
 LPXLOPER12 makeXLOPER12(Flag!"autoFree" autoFree=Flag.autoFree.No)(string arg)
 {
@@ -322,7 +335,7 @@ LPXLOPER12 makeXLOPER12(Flag!"autoFree" autoFree=Flag.autoFree.No)(Variant[][] a
 	}
 	auto numCols=arg[0].length;
 	foreach(row;arg[1..$])
-		enforce(row.length==numCols, new Exception("makeXLOPER12: arg must be rectangular");
+		enforce(row.length==numCols, new Exception("makeXLOPER12: arg must be rectangular"));
 	
 	auto xlValuesLength=numRows*numCols;
 	XLOPER12* ret=allocXLOPER12!autoFree(1);
@@ -542,10 +555,10 @@ string makeMultiArgWrap(string wrapperName, int numArgs)
 ";
 	return ret;
 }
-
+/+
 mixin!makeMultiArgWrap("multiArgWrap30",30);
 multiArgWrap30(&simpleMulti);
-
++/
 LPXLOPER12 simpleMulti(LPXLOPER12[] args)
 {
 	Variant[][][] niceArgs;
