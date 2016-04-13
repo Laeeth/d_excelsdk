@@ -1,0 +1,24 @@
+LIBRARY "generic64.dll"
+DESCRIPTION     'Simple D add-in to Excel'
+EXETYPE		NT
+CODE            PRELOAD DISCARDABLE
+DATA            PRELOAD MULTIPLE
+EXPORTS
+                xlAutoOpen			@2
+                xlAutoClose			@3
+                xlAutoRegister12	@4
+                xlAutoAdd			@5
+                xlAutoRemove		@6
+                xlAddInManagerInfo12 @7
+                DIALOGMsgProc		@8
+                ExcelCursorProc	@9
+                HookExcelWindow	@10
+                UnhookExcelWindow	@11
+                fShowDialog	@12
+                GetHwnd	@13
+                Func1	@14
+                FuncSum	@15
+                fDance	@16
+				fDialog @17
+                fExit	@18
+                FuncFib	@19
