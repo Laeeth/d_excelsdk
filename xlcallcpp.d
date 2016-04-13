@@ -12,8 +12,8 @@
 */
 
 // import windows.h
-import std.c.windows.windows;
-//import core.sys.windows.windows;
+//import std.c.windows.windows;
+import core.sys.windows.windows;
 import xlcall;
 import core.vararg;
 

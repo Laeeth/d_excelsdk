@@ -20,7 +20,8 @@ MemoryPool.d - port of MemoryPool.cpp and MemoryPool.h by Laeeth Isharc
 //
 ///***************************************************************************
 */
-import std.c.windows.windows;
+import core.sys.windows.windows;
+//import std.c.windows.windows;
 
 //
 // Total amount of memory to allocate for all temporary XLOPERs
