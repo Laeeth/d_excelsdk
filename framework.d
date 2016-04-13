@@ -70,7 +70,8 @@
 */
 debug=0;
 
-import std.c.windows.windows;
+import core.sys.windows.windows;
+//import std.c.windows.windows;
 import xlcall;
 import xlcallcpp;
 import core.stdc.string;

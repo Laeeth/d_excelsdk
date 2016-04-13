@@ -27,8 +27,8 @@
 //
 // Total number of memory allocation pools to manage
 //
-
-import std.c.windows.windows;
+import core.sys.windows.windows;
+//import std.c.windows.windows;
 import xlcall;
 import xlcallcpp;
 import memorypool;

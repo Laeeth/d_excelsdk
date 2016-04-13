@@ -1,2 +1,3 @@
-C:\D\dmd2\windows\bin\dmd -c -g -m64 -ofgeneric.obj generic.d  memorymanager.d memorypool.d xlcall.d xlcallcpp.d framework.d
-C:\d\dmd2\windows\bin\dmd -m64 -ofgeneric64.dll generic.obj generic64.def xlcall64d.lib -g -map 
+rm generic64.xll
+dmd -c -gc -m64 -map -ofgeneric64.obj generic.d  memorymanager.d memorypool.d xlcall.d xlcallcpp.d framework.d
+dmd -m64 -g -L/OUT:generic64.xll  -L/NOLOGO -L generic64.obj generic64.def xlcall64d.lib

@@ -74,7 +74,7 @@
 
 */
 import win32.winuser:PostMessage,CallWindowProc,GetWindowLongPtr,SetWindowLongPtr,DialogBox;
-import std.c.windows.windows;
+//import std.c.windows.windows;
 import core.sys.windows.windows;
 import xlcall;
 import framework;

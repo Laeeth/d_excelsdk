@@ -15,8 +15,8 @@
   
   	Ported to the D Programming Language by Laeeth Isharc (2015)
 */
-import std.c.windows.windows;
-
+//import std.c.windows.windows;
+import core.sys.windows.windows;
 /**
    XL 12 Basic Datatypes 
  */
