@@ -440,7 +440,7 @@ if (isNumeric!(T))
 	XLOPER12[] xlValues;
 	{
 		static if(autoFree.No)
-			scope(fail)
+			scope(failure)
 				theAllocator.dispose(ret);
  		xlValues= allocXLOPER12Slice!autoFree(xlValuesLength);
  	}
@@ -483,7 +483,7 @@ if (isSomeString!(T))
 	}
 	auto numCols=arg[0].length;
 	foreach(row;arg[1..$])
-		enforce(row.length==numCols, new Exception("makeXLOPER12: arg must be rectangular");
+		enforce(row.length==numCols, new Exception("makeXLOPER12: arg must be rectangular"));
 
 	auto xlValuesLength=numRows*numCols;
 	XLOPER12* ret=allocXLOPER12!autoFree(1);
