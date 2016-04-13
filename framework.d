@@ -230,7 +230,7 @@ int  Excel(int xlfn, LPXLOPER pxResult, LPXLOPER[] args ...) // cdecl
 {
 	int xlret;
 	
-	xlret = Excel4v(xlfn,pxResult,args.length,cast(LPXLOPER *)args.ptr);
+	xlret = Excel4v(xlfn,pxResult,cast(int)args.length,cast(LPXLOPER *)args.ptr);
 
 	static if(false) //debug
 	{
@@ -332,7 +332,7 @@ int Excel12f(int xlfn, LPXLOPER12 pxResult, LPXLOPER12[] args) // cdecl
 {
 	int xlret;
 
-	xlret = Excel12v(xlfn,pxResult,args.length, cast(LPXLOPER12 *)args.ptr);
+	xlret = Excel12v(xlfn,pxResult,cast(int)args.length, cast(LPXLOPER12 *)args.ptr);
 	
 	static if(false) //debug
 	{
@@ -659,7 +659,7 @@ LPXLOPER12 TempStr12(wstring lpstr)
 {
 	LPXLOPER12 lpx;
 	wchar* lps;
-	int len=lpstr.length;
+	int len=cast(int)lpstr.length;
 
 	lpx = cast(LPXLOPER12) (GetTempMemory(XLOPER12.sizeof + (len+1)*2));
 
