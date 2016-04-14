@@ -26,20 +26,23 @@
 
 
 /*
-	Don't forget to figure out when to set the xlAutoFree bits!
+	Don't forget to figure out when to set the xlautoFree bits!
 */
 
 module xlld.wrap;
+import std.typecons:Flag;
+import std.traits;
 import std.variant;
 import win32.winuser:PostMessage,CallWindowProc,GetWindowLongPtr,SetWindowLongPtr,DialogBox;
-import std.c.windows.windows;
 import core.sys.windows.windows;
 import xlcall;
 import framework;
 import core.stdc.wchar_ : wcslen;
 import core.stdc.wctype:towlower;
 import std.format;
-  
+import std.experimental.allocator;  
+import std.conv:to;
+import std.exception:enforce;
 /+
   
 /**
@@ -138,7 +141,7 @@ struct ExcelResult(T)
 {
 	bool success;
 	ExcelReturnStatus status;
-	T[][] data;
+	T data;
 	alias data this;
 }
 
@@ -158,30 +161,33 @@ auto fromXLOPER12(T=Variant[][])(LPXLOPER12 pxArg)
 if (is(T==Variant[][]) || (is(T==double[][])) || is(T==double[]))
 {
 	ExcelResult!T ret;
-	long i;					// Row and column counters for arrays 
 	LPXLOPER12 px;			// Pointer into array 
 	ret.success=true;
 	ret.status=ExcelReturnStatus.success;
 
-	switch (pxArg.xltype)
+/*	scope(exit)
+		Excel12f(xlFree, cast(XLOPER12*)0, [cast(LPXLOPER12) &pxArg]);
+*/	switch (pxArg.xltype)
 	{	
 		case xltypeMissing:
-			return ExcelResult(false,ExcelReturnStatus.missing);
+			return ExcelResult!T(false,ExcelReturnStatus.missing,T.init);
 
 		case xltypeNum:
 			static if (is(T==double[]))
-				return ExcelResult(true,ExcelReturnStatus.success,[pxArg.val.num]);
-			else
-				return ExcelResult(true,ExcelReturnStatus.success,[[pxArg.val.num]]);
+				return ExcelResult!T(true,ExcelReturnStatus.success,[pxArg.val.num]);
+			else static if (is(T==double[][]))
+				return ExcelResult!T(true,ExcelReturnStatus.success,[[pxArg.val.num]]);
+			else // Variant[][]
+				return ExcelResult!T(true,ExcelReturnStatus.success,[[Variant(pxArg.val.num)]]);
 			break;
 
 		case xltypeStr:
 			static if (is(T==double[]))
-				return ExcelDoubleResultVector(false,ExcelReturnStatus.wrongType,[double.nan]);
+				return ExcelResult!T(false,ExcelReturnStatus.wrongType,[double.nan]);
 			else static if(is(T==double[][]))
-				return ExcelDoubleResultMatrix(false,ExcelReturnStatus.wrongType,[[double.nan]]);
-			else
-				return ExcelVariantResultMatrix(true,ExcelReturnStatus.success,[[pxArg.val.str.to!string()]]);
+				return ExcelResult!T(false,ExcelReturnStatus.wrongType,[[double.nan]]);
+			else // Variant[][]
+				return ExcelResult!T(true,ExcelReturnStatus.success,[[Variant(pxArg.val.str.to!string())]]);
 
 		case xltypeRef:
 		case xltypeSRef:
@@ -190,30 +196,30 @@ if (is(T==Variant[][]) || (is(T==double[][])) || is(T==double[]))
 			scope(exit)
 			{
 				Excel12f(xlFree, cast(XLOPER12*)0, [cast(LPXLOPER12) &xMulti]);
-				Excel12f(xlFree, cast(XLOPER12*)0, [cast(LPXLOPER12) pxArg]);
+				//Excel12f(xlFree, cast(XLOPER12*)0, [cast(LPXLOPER12) pxArg]);
 			}
 			//	coerce might have failed due to an uncalced cell
 			// Microsoft Excel will call us again in a moment after that cell has been calced.
 			if (xlretUncalced == Excel12f(xlCoerce, &xMulti, [cast(LPXLOPER12) pxArg, TempInt12(xltypeMulti)]))
 			{
 				static if(is(T==Variant[][]))
-					return ExcelVariantResultMatrix(false,ExcelReturnStatus.uncalced,[[double.nan]]);
+					return ExcelResult!T(false,ExcelReturnStatus.uncalced,[[Variant(double.nan)]]);
 				else static if(is(T==double[][]))
-					return ExcelDoubleResultMatrix(false,ExcelReturnStatus.uncalced,[[double.nan]]);
+					return ExcelResult!T(false,ExcelReturnStatus.uncalced,[[double.nan]]);
 				else static if(is(T==double[]))
-					return ExcelDoubleResultVector(false,ExcelReturnStatus.uncalced,[[double.nan]]);
+					return ExcelResult!T(false,ExcelReturnStatus.uncalced,[double.nan]);
 			}
 			auto numRows=xMulti.val.array.rows;
 			auto numCols=xMulti.val.array.columns;
 			static if(is(T==double[]))
 			{
 				if (!(numRows==1 || numCols==1))
-					return ExcelDoubleResultVector(false,ExcelReturnStatus.wrongShape,[double.nan]);
+					return ExcelResult!T(false,ExcelReturnStatus.wrongShape,[double.nan]);
 				bool flipped=(numCols!=1);
 				if (!flipped)
-					ret.length=numRows.length;
+					ret.length=numRows;
 				else
-					ret.length=numCols.length;
+					ret.length=numCols;
 			}
 			else static if(is(T==Variant[][]) || is(T==double[][]))
 			{
@@ -226,7 +232,7 @@ if (is(T==Variant[][]) || (is(T==double[][])) || is(T==double[]))
 				foreach(j;0..numCols)
 				{
 					// obtain a pointer to the current item //
-					px = xMulti.val.array.lparray(i*numCols+j);
+					px = xMulti.val.array.lparray+i*numCols+j;
 					// switch on XLOPER12 type //
 					switch (px.xltype)
 					{
@@ -244,7 +250,7 @@ if (is(T==Variant[][]) || (is(T==double[][])) || is(T==double[]))
 
 						// if an error store in error //
 						case xltypeErr:
-							status=ExcelReturnStatus.excelError;
+							ret.status=ExcelReturnStatus.excelError;
 							static if ((is(T==Variant[][]))||(is(T==double[][])))
 							{
 								ret[i][j]=px.val.err;
@@ -275,81 +281,86 @@ if (is(T==Variant[][]) || (is(T==double[][])) || is(T==double[]))
 						// if anything else set error //
 						default:
 							static if(is(T==Variant[][]))
-								return ExcelVariantResultMatrix(false,ExcelReturnStatus.unhandledType,[[double.nan]]);
+								return ExcelResult!T(false,ExcelReturnStatus.unhandledType,[[Variant(double.nan)]]);
 							else static if(is(T==double[][]))
-								return ExcelVariantResultMatrix(false,ExcelReturnStatus.unhandledType,[[double.nan]]);
+								return ExcelResult!T(false,ExcelReturnStatus.unhandledType,[[double.nan]]);
 							else
-								return ExcelVariantResultVector(false,ExcelReturnStatus.unhandledType,[double.nan]);
+								return ExcelResult!T(false,ExcelReturnStatus.unhandledType,[double.nan]);
 					}
 				}
 			}
-			ret.success=(status==ExcelReturnStatus.success);
-			ret.status=status;
+			ret.success=(ret.status==ExcelReturnStatus.success);
 			return ret;
-			static if(is(T))
-			// free the returned array //
-			break;
 
 		case xltypeErr:
-			success=false;
+			ret.status=ExcelReturnStatus.excelError;
 			break;
 
 		default:
-			success=false;
+			ret.status=ExcelReturnStatus.unhandledType;
 			break;
 	}
 	ret.success=(ret.status==ExcelReturnStatus.success);
 	return ret;
 }
 
+struct excelCallPool
+{
+	static auto allocateBytes(size_t size)
+	{
+		return theAllocator.makeArray!ubyte(size);
+	}
+	static auto allocateArray(T)(size_t size)
+	{
+		return cast(T*)theAllocator.makeArray!ubyte(size*T.sizeof);
+	}
+	static auto allocate(T)()
+	{
+		return cast(T*)theAllocator.makeArray!ubyte(T.sizeof);
+	}
+}
+
+
+extern(Windows) void xlAutoFree12(LPXLOPER12 p)
+{
+	import std.experimental.allocator;
+	if (p.xltype==(xltypeMulti | xlbitDLLFree))
+		theAllocator.dispose(cast(ubyte*)p);
+}
 
 LPXLOPER12 makeXLOPER12(double arg)
 {
 	LPXLOPER12 lpx;
-	lpx=cast(LPXLOPER12) excelCallPool.allocate(XLOPER12.sizeof);
-	lpx.xltype=xltypeNum;
+	lpx=excelCallPool.allocate!XLOPER12;
+	lpx.xltype=xltypeNum|xlbitDLLFree;
 	lpx.val.num=arg;
 	return lpx;
 }
 // need to have allocator!
-LPXLOPER12 makeXLOPER12(Flag!"autoFree" autoFree=Flag.autoFree.No)(string arg)
+LPXLOPER12 makeXLOPER12(wstring arg)
 {
 	LPXLOPER12 lpx;
-	static if(Flag.autoFree.yes)
-		lpx = cast(LPXLOPER12) excelCallPool.allocate(XLOPER12.sizeof);
-	else
-		lpx=theAllocator.allocate.make!XLOPER12(1);
-	lpx.xltype = xltypeStr;
-	lpx.val.str = arg.makePascalString;
+	lpx = excelCallPool.allocate!XLOPER12;
+	lpx.xltype = xltypeStr|xlbitDLLFree;
+	lpx.val.str = arg.dup.ptr.makePascalString;
 	return lpx;
 }
  
-LPXLOPER12 makeXLOPER12(Flag!"autoFree" autoFree=Flag.autoFree.No)(Variant[] arg)
+LPXLOPER12 makeXLOPER12(Variant[] arg)
 {
-	return makeXLOPER12!autoFree([arg]);
+	return makeXLOPER12([arg]);
 }
 
-LPXLOPER12 makeXLOPER12(Flag!"autoFree" autoFree=Flag.autoFree.No)(Variant[][] arg)
+LPXLOPER12 makeXLOPER12(Variant[][] arg)
 {
 	auto numRows=arg.length;
-	if(numRows==0)
-	{
-
-	}
 	auto numCols=arg[0].length;
-	foreach(row;arg[1..$])
+	foreach(row;arg[0..$])
 		enforce(row.length==numCols, new Exception("makeXLOPER12: arg must be rectangular"));
 	
 	auto xlValuesLength=numRows*numCols;
-	XLOPER12* ret=allocXLOPER12!autoFree(1);
-	XLOPER12[] xlValues;
-	{
-		static if(autoFree.No)
-			scope(failure)
-				theAllocator.dispose(ret);
- 		xlValues= allocXLOPER12Slice!autoFree(xlValuesLength);
- 	}
-	ret.xltype=xltypeMulti;
+	auto ret=excelCallPool.allocate!XLOPER12;
+	auto xlValues= excelCallPool.allocateArray!XLOPER12(xlValuesLength);
 
 	foreach(i;0..numRows)		
 	{
@@ -360,9 +371,9 @@ LPXLOPER12 makeXLOPER12(Flag!"autoFree" autoFree=Flag.autoFree.No)(Variant[][] a
 				xlValues[i*numCols+j].val.num=arg[i][j].get!(double);
 				xlValues[i*numCols+j].xltype=xltypeNum;
 			}
-			else if(arg[i][j].convertsTo!(string))
+			else if(arg[i][j].convertsTo!(wstring))
 			{
-				xlValues[i*numCols+j].val.str=arg[i][j].get!(string).makePascalString;
+				xlValues[i*numCols+j].val.str=arg[i][j].get!(wstring).dup.ptr.makePascalString;
 				xlValues[i*numCols+j].xltype=xltypeStr;
 			}
 			else if(arg[i][j]==null)
@@ -377,79 +388,36 @@ LPXLOPER12 makeXLOPER12(Flag!"autoFree" autoFree=Flag.autoFree.No)(Variant[][] a
 		}
 	}
 
-	ret.xltype = xltypeMulti;
-	ret.val.array.lparray = xlValues.ptr;
-	ret.val.array.rows = numRows;
-	ret.val.array.columns = numCols;
+	ret.xltype = xltypeMulti|xlbitDLLFree;
+	ret.val.array.lparray = xlValues;
+	ret.val.array.rows = numRows.to!int;
+	ret.val.array.columns = numCols.to!int;
 	return ret;
 }
-
-LPXLOPER12 makeXLOPER12(Flag!"autoFree" autoFree=Flag.autoFree.No,T)(T[] arg)
-if (isNumeric!(T))
+/+
+LPXLOPER12 makeXLOPER12(T)(T[][] arg)
+if (is(T:double))
 {
-	return makeXLOPER12([arg]);
+	import std.algorithm:map;
+	import std.array:array;
+	return makeXLOPER12!(Variant[][])([arg.map!(arg=>Variant(arg)).array]);
 }
++/
 
-private XLOPER12* allocXLOPER12(Flag!"autoFree" autoFree=Flag.autoFree.No)(size_t n=1)
-{
-	XLOPER12* ret;
-	static if(Flag.autoFree.yes)
-	{
-		ret = cast(XLOPER12*) excelCallPool.allocate(XLOPER12.sizeof*n);
-		if (ret is null)
-			throw new Exception("allocXLOPER12 memory allocation error for "~n.to!string~" XLOPER12s");
-	}
-	else
-	{
-		ret = cast(XLOPER12*) theAllocator.allocate.make!XLOPER12(n);
-		if (ret is null)
-			throw new Exception("allocXLOPER12 memory allocation error for "~n.to!string~" XLOPER12s");
-	}
-	return ret;
-}
-
-private XLOPER12[] allocXLOPER12Slice(Flag!"autoFree" autoFree=Flag.autoFree.No)(size_t n=1)
-{
-	XLOPER12[] ret;
-	static if(Flag.autoFree.yes)
-	{
-		ret= cast(XLOPER12[0..xlValuesLength]) excelCallPool.allocate(XLOPER12.sizeof*n);
-		if ((ret is null) || (ret.length!=n))
-			throw new Exception("allocXLOPER12Slice memory allocation error for "~n.to!string~" XLOPER12s");
-	}
-	else
-	{
-		ret=theAllocator.makeArray!XLOPER12(xlValuesLength);
-		if (ret.length!=n)
-		{
-			throw new Exception("allocXLOPER12Slice memory allocation error for "~n.to!string~" XLOPER12s");
-		}
-	}
-}
-
-
-LPXLOPER12 makeXLOPER12(Flag!"autoFree" autoFree=Flag.autoFree.No,T)(T[][] arg)
-if (isNumeric!(T))
+LPXLOPER12 makeXLOPER12(T)(T[][] arg)
+if (is(T==double))
 {
 	auto numCols=arg[0].length;
-	foreach(row;arg[1..$])
-		enforce(row.length==numCols, new Exception("makeXLOPER12: arg must be rectangular"));
-
-	auto xlValuesLength=numRows*numCols;
-	XLOPER12* ret=allocXLOPER12!autoFree(1);
-	XLOPER12[] xlValues;
+	foreach(row;arg)
 	{
-		static if(autoFree.No)
-			scope(failure)
-				theAllocator.dispose(ret);
- 		xlValues= allocXLOPER12Slice!autoFree(xlValuesLength);
- 	}
-	ret.xltype=xltypeMulti;
-	auto numRows=arg.length;
-	if(numRows==0)
-	{
-
+		if(row.length!=numCols)
+			return makeXLOPER12Error;
 	}
+
+	auto numRows=arg.length;
+	auto xlValuesLength=numRows*numCols;
+	auto ret=excelCallPool.allocate!XLOPER12;
+	auto xlValues=excelCallPool.allocateArray!XLOPER12(xlValuesLength);
 	foreach(i;0..numRows)		
 	{
 		foreach(j;0..numCols)
@@ -459,42 +427,32 @@ if (isNumeric!(T))
 		}
 	}
 
-	ret.xltype = xltypeMulti;
-	ret.val.array.lparray = xlValues.ptr;
-	ret.val.array.rows = numRows;
-	ret.val.array.columns = numCols;
+	ret.xltype=xltypeMulti|xlbitDLLFree;
+	ret.val.array.lparray = xlValues;
+	ret.val.array.rows = numRows.to!int;
+	ret.val.array.columns = numCols.to!int;
 	return ret;
 }
 
-LPXLOPER12 makeXLOPER12(Flag!"autoFree" autoFree=Flag.autoFree.No,T)(T[] arg)
+LPXLOPER12 makeXLOPER12(T)(T[] arg)
 if (isSomeString!(T))
 {
 	return makeXLOPER12([arg]);
 }
 
-LPXLOPER12 makeXLOPER12(Flag!"autoFree" autoFree=Flag.autoFree.No,T)(T[][] arg)
+LPXLOPER12 makeXLOPER12(T)(T[][] arg)
 if (isSomeString!(T))
 {
-	ret.xltype=xltypeMulti;
+	ret.xltype=xltypeMulti|xlbitDLLFree;
 	auto numRows=arg.length;
-	if(numRows==0)
-	{
-
-	}
 	auto numCols=arg[0].length;
 	foreach(row;arg[1..$])
 		enforce(row.length==numCols, new Exception("makeXLOPER12: arg must be rectangular"));
 
 	auto xlValuesLength=numRows*numCols;
-	XLOPER12* ret=allocXLOPER12!autoFree(1);
-	XLOPER12[] xlValues;
-	{
-		static if(autoFree.No)
-			scope(fail)
-				theAllocator.dispose(ret);
- 		xlValues= allocXLOPER12Slice!autoFree(xlValuesLength);
- 	}
-
+	auto ret=excelCallPool.allocate!XLOPER12;
+	auto xlValues=excelCallPool.allocateArray!XLOPER12(xlValuesLength);
+	
 	foreach(i;0..numRows)		
 	{
 		foreach(j;0..numCols)
@@ -504,19 +462,19 @@ if (isSomeString!(T))
 		}
 	}
 
-	ret.xltype = xltypeMulti;
-	ret.val.array.lparray = xlValues;//&xlValues[0];
+	ret.xltype = xltypeMulti|xlbitDLLFree;
+	ret.val.array.lparray = xlValues;
 	ret.val.array.rows = numRows;
 	ret.val.array.columns = numCols;
-	return cast(LPXLOPER12) &ret;
+	return cast(LPXLOPER12) ret;
 }
 
-LPXLOPER12 makeXLOPER12Error(Flag!"autoFree" autoFree=Flag.autoFree.No)()
+LPXLOPER12 makeXLOPER12Error(int error=-1)
 {
-	XLOPER12* ret=allocXLOPER12!autoFree(1);
-	ret.xltype = xltypeErr;
+	auto ret=excelCallPool.allocate!XLOPER12;
+	ret.xltype = xltypeErr|xlbitDLLFree;
 	ret.val.err = error;
-	return cast(LPXLOPER12)ret;
+	return ret;
 }
 
 
@@ -562,7 +520,7 @@ string makeMultiArgWrap(string wrapperName, int numArgs)
 mixin!makeMultiArgWrap("multiArgWrap30",30);
 multiArgWrap30(&simpleMulti);
 +/
-LPXLOPER12 simpleMulti(LPXLOPER12[] args)
+/*LPXLOPER12 simpleMulti(LPXLOPER12[] args)
 {
 	Variant[][][] niceArgs;
 	bool success=true;
@@ -576,7 +534,7 @@ LPXLOPER12 simpleMulti(LPXLOPER12[] args)
 		}
 		niceArgs~=conv.data;
 	}
-	return [args.length].makeXLOPER12;
+	return [args.length.to!double].makeXLOPER12;
 }
 
-
+*/
