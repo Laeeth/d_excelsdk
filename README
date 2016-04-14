@@ -17,3 +17,64 @@ type into cell A10  =funcsum(A1:A3).  you should see the sum of the numbers
 
 more coming soon.
 
+see generic.d for a set of sample workbook functions.
+workbook functions and dialogue boxes seem to work.  toolbars crash (so don't register them for now).
+
+to write a function in D, you will need to add it to the registration table.
+see Excel reference for the function string and format
+
+ultimate aim is to achive pyxll style wrapping of D functions using UDAs.
+
+in the meantime it's possible to convert excel worksheet matrices to D
+and D double[][] back to excel using the functions
+
+convert from excel XLOPER* to double[] or double[][]
+======================================================
+double[] fromXLOPER12!(double[])(LPXLOPER12 arg);
+double[][] fromXLOPER12!(double[][])(LPXLOPER12 arg);
+
+convert from double[] or double[][] to XLOPER*
+=============================================
+LPXLOPER12 makeXLOPER12(double[] arg);
+LPXLOPER12 makeXLOPER12(double[][] arg);
+
+memory is allocated using std.experimental.allocator as ubyte, and freed
+via xlAutoFree.  so in theory the user does not need to concern himself with
+this.  Not sure that I free everything when I should in fromXLOPER12.
+
+D exceptions will cause problems - D code should have a try{} catch(Throwable t){} around all code and return:
+
+LPXLOPER12 makeXLOPER12Error(int errorCode,string errorMessage);
+then the message can be retrieved from excel by:
+	=lastErrorMessage()
+
+
+
+for example:
+extern(Windows) LPXLOPER12 WrapSquare3(
+                        LPXLOPER12 px1,LPXLOPER12 px2,LPXLOPER12 px3,LPXLOPER12 px4,
+                        LPXLOPER12 px5,LPXLOPER12 px6,LPXLOPER12 px7,LPXLOPER12 px8,
+                        LPXLOPER12 px9,LPXLOPER12 px10,LPXLOPER12 px11,LPXLOPER12 px12,
+                        LPXLOPER12 px13,LPXLOPER12 px14,LPXLOPER12 px15,LPXLOPER12 px16,
+                        LPXLOPER12 px17,LPXLOPER12 px18,LPXLOPER12 px19,LPXLOPER12 px20,
+                        LPXLOPER12 px21,LPXLOPER12 px22,LPXLOPER12 px23,LPXLOPER12 px24,
+                        LPXLOPER12 px25,LPXLOPER12 px26,LPXLOPER12 px27,LPXLOPER12 px28,
+                        LPXLOPER12 px29)
+{
+	import std.algorithm:map,sum;
+	auto args=px1.fromXLOPER12!(double[]);
+	if (args.length==0)
+		return makeXLOPER12Error(100,"you must pass at least one argument");
+	double[][] retD;
+	retD.length=args.length;
+	foreach(i;0..args.length)
+	{
+		retD[i].length=args.length;
+		foreach(j;0..args.length)
+		{
+			retD[i][j]=args[0..j+1].map!(arg=>arg*arg).sum;
+		}
+	}
+	return makeXLOPER12(retD);
+}
+

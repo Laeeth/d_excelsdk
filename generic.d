@@ -81,7 +81,8 @@ import framework;
 import core.stdc.wchar_ : wcslen;
 import core.stdc.wctype:towlower;
 import std.format;
- //import generic;
+import xlld.wrap;
+ 
 enum GWLP_WNDPROC=-4;
 enum MAXWORD = 0xFFFF;
 debug=0;
@@ -152,7 +153,7 @@ wchar[20] g_szBuffer = ""w;
    g_rgWorksheetFuncsRows define the number of rows in the table. The
    g_rgWorksheetFuncsCols represents the number of columns in the table.
 */
-enum g_rgWorksheetFuncsRows =3;
+enum g_rgWorksheetFuncsRows =5;
 enum g_rgWorksheetFuncsCols =10;
 
 __gshared wstring[g_rgWorksheetFuncsCols][g_rgWorksheetFuncsRows] g_rgWorksheetFuncs =
@@ -178,6 +179,30 @@ __gshared wstring[g_rgWorksheetFuncsCols][g_rgWorksheetFuncsRows] g_rgWorksheetF
 		""w,                                    
 		""w,                                  
 		"Adds the arguments"w,   
+		"Number1,number2,... are 1 to 29 arguments for which you want to sum."w                   
+	],
+	[ "lastErrorMessage"w,
+		"Q"w, // up to 255 args in Excel 2007 and later,
+										   // upto 29 args in Excel 2003 and earlier versions
+		"lastErrorMessage"w,
+		""w,
+		"1"w,
+		"Generic Add-In"w,
+		""w,                                    
+		""w,                                  
+		"Return last D error message"w,   
+		""w,
+	],
+	[ "WrapSquare3"w,
+		"QQQQQQQQQQQQQQQQQQQQQQQQQQQQQQ"w, // up to 255 args in Excel 2007 and later,
+										   // upto 29 args in Excel 2003 and earlier versions
+		"WrapSquare3"w,
+		"number1,number2,..."w,
+		"1"w,
+		"Generic Add-In"w,
+		""w,                                    
+		""w,                                  
+		"Sum of squares of the arguments"w,   
 		"Number1,number2,... are 1 to 29 arguments for which you want to sum."w                   
 	],
 	[ "FuncFib"w,
@@ -448,7 +473,8 @@ extern(Windows) BOOL /*APIENTRY*/ DllMain( HANDLE hDLL, DWORD dwReason, LPVOID l
 extern(Windows) int /*WINAPI*/ xlAutoOpen()
 {
 	import std.conv;
-
+	import core.runtime:rt_init;
+	rt_init();
 	static XLOPER12 xDLL,	   // name of this DLL //
 	xMenu,	 // xltypeMulti containing the menu //
 	xTool,	 // xltypeMulti containing the toolbar //
@@ -673,6 +699,9 @@ extern(Windows) int /*WINAPI*/ xlAutoClose()
 		// Free the XLOPER12 returned by xlfGetToolbar //
 		Excel12f(xlFree, cast(XLOPER12*)0, [cast(LPXLOPER12) &xRes]);
 	}
+
+	import core.runtime:rt_term;
+	rt_term();
 
 	return 1;
 }
@@ -1283,6 +1312,35 @@ extern(Windows) LPXLOPER12 /*WINAPI*/ Func1 (LPXLOPER12 x)
   
    History:  Date       Author        Reason
 */
+
+extern(Windows) LPXLOPER12 WrapSquare3(
+                        LPXLOPER12 px1,LPXLOPER12 px2,LPXLOPER12 px3,LPXLOPER12 px4,
+                        LPXLOPER12 px5,LPXLOPER12 px6,LPXLOPER12 px7,LPXLOPER12 px8,
+                        LPXLOPER12 px9,LPXLOPER12 px10,LPXLOPER12 px11,LPXLOPER12 px12,
+                        LPXLOPER12 px13,LPXLOPER12 px14,LPXLOPER12 px15,LPXLOPER12 px16,
+                        LPXLOPER12 px17,LPXLOPER12 px18,LPXLOPER12 px19,LPXLOPER12 px20,
+                        LPXLOPER12 px21,LPXLOPER12 px22,LPXLOPER12 px23,LPXLOPER12 px24,
+                        LPXLOPER12 px25,LPXLOPER12 px26,LPXLOPER12 px27,LPXLOPER12 px28,
+                        LPXLOPER12 px29)
+{
+	import std.algorithm:map,sum;
+	import std.experimental.allocator;
+	import std.conv:to;
+	auto args=px1.fromXLOPER12!(double[]);
+	double[][] retD;
+	if (args.length==0)
+		return makeXLOPER12Error(100,"you must pass at least one argument");
+	retD.length=args.length;
+	foreach(i;0..args.length)
+	{
+		retD[i].length=args.length;
+		foreach(j;0..args.length)
+		{
+			retD[i][j]=args[0..j+1].map!(arg=>arg*arg).sum;
+		}
+	}
+	return makeXLOPER12(retD);
+}
 
 extern(Windows) LPXLOPER12 /*WINAPI*/ FuncSum(
                         LPXLOPER12 px1,LPXLOPER12 px2,LPXLOPER12 px3,LPXLOPER12 px4,
